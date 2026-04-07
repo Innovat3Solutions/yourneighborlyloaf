@@ -1,0 +1,67 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Pacifico&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Nunito", sans-serif;
+  --font-script: "Pacifico", cursive;
+  
+  --color-teal: #5ec4c0;
+  --color-yellow: #fbb03b;
+  --color-yellow-hover: #e59e35;
+  --color-ink: #2c2c28;
+  --color-warm-white: #fdfbf7;
+  --color-warm-gray: #f5f5f0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-warm-white);
+  color: var(--color-ink);
+}
+
+.bg-stripes {
+  background-color: var(--color-teal);
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent,
+    transparent calc(10% - 1px),
+    rgba(255, 255, 255, 0.15) calc(10% - 1px),
+    rgba(255, 255, 255, 0.15) 10%
+  );
+}
+
+.scallop-top {
+  position: absolute;
+  top: -1px;
+  left: 0;
+  right: 0;
+  height: 20px;
+  background-image: radial-gradient(circle at 20px 0, var(--color-warm-white) 20px, transparent 21px);
+  background-size: 40px 20px;
+  background-repeat: repeat-x;
+  z-index: 10;
+}
+
+.scallop-bottom {
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 20px;
+  background-image: radial-gradient(circle at 20px 20px, var(--color-warm-white) 20px, transparent 21px);
+  background-size: 40px 20px;
+  background-repeat: repeat-x;
+  z-index: 10;
+}
+
+.scallop-down {
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 30px;
+  background-image: radial-gradient(circle at 30px 0, transparent 30px, var(--color-warm-white) 31px);
+  background-size: 60px 30px;
+  background-repeat: repeat-x;
+  z-index: 20;
+}
