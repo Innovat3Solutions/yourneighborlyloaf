@@ -119,18 +119,61 @@ const Navbar = ({ onOrderClick, onContactClick }: { onOrderClick: () => void; on
 
 const Hero = () => (
   <section id="home" className="bg-stripes pt-28 pb-8 md:min-h-screen md:pt-36 relative flex flex-col items-center grain-overlay">
-    {/* Animated floating icons */}
-    <div className="absolute top-1/4 left-[5%] md:left-[10%] opacity-30 md:opacity-40 scale-75 md:scale-100 animate-float">
-      <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2.5a2.5 2.5 0 0 0-2.5 2.5c0 1.5 2.5 4 2.5 4s2.5-2.5 2.5-4a2.5 2.5 0 0 0-2.5-2.5z"/><path d="M19 10h-1.5a2.5 2.5 0 0 0-5 0H12h-.5a2.5 2.5 0 0 0-5 0H5a2 2 0 0 0-2 2v2c0 3 2.5 5.5 5.5 5.5h7c3 0 5.5-2.5 5.5-5.5v-2a2 2 0 0 0-2-2z"/></svg>
+    {/* Background image with dark overlay (clipped to section, doesn't constrain children) */}
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <img
+        src="/hero-background.png"
+        alt=""
+        aria-hidden="true"
+        className="absolute inset-0 w-full h-full object-cover opacity-40 select-none"
+      />
+      <div className="absolute inset-0 bg-black/55" />
     </div>
-    <div className="absolute bottom-1/4 left-[10%] md:left-[20%] opacity-30 md:opacity-40 scale-75 md:scale-100 hidden sm:block animate-float-slow" style={{ animationDelay: '1s' }}>
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+
+    {/* Floating decorative elements — refined botanical & geometric */}
+    {/* Wheat sprig */}
+    <div className="absolute top-1/4 left-[5%] md:left-[10%] opacity-25 md:opacity-30 scale-75 md:scale-100 animate-float">
+      <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 22V8" />
+        <path d="M12 8c0-2 1.5-3.5 3.5-3.5C15.5 6.5 14 8 12 8z" />
+        <path d="M12 8c0-2-1.5-3.5-3.5-3.5C8.5 6.5 10 8 12 8z" />
+        <path d="M12 12c0-1.6 1.2-3 3-3 0 1.7-1.4 3-3 3z" />
+        <path d="M12 12c0-1.6-1.2-3-3-3 0 1.7 1.4 3 3 3z" />
+        <path d="M12 16c0-1.6 1.2-3 3-3 0 1.7-1.4 3-3 3z" />
+        <path d="M12 16c0-1.6-1.2-3-3-3 0 1.7 1.4 3 3 3z" />
+      </svg>
     </div>
-    <div className="absolute top-1/3 right-[5%] md:right-[10%] opacity-30 md:opacity-40 scale-75 md:scale-100 animate-float-reverse">
-       <svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"/><path d="M2 21h20"/><path d="M7 8v3"/><path d="M12 8v3"/><path d="M17 8v3"/><path d="M7 4h.01"/><path d="M12 4h.01"/><path d="M17 4h.01"/></svg>
+
+    {/* 4-point sparkle */}
+    <div className="absolute bottom-1/4 left-[10%] md:left-[20%] opacity-30 md:opacity-40 scale-75 md:scale-100 hidden sm:block animate-pulse-soft" style={{ animationDelay: '1s' }}>
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="white" stroke="none">
+        <path d="M12 2 L13.2 10.8 L22 12 L13.2 13.2 L12 22 L10.8 13.2 L2 12 L10.8 10.8 Z" />
+      </svg>
     </div>
-    <div className="absolute top-[20%] lg:bottom-1/3 right-[15%] md:right-[20%] opacity-30 md:opacity-40 scale-75 md:scale-100 z-0 hidden sm:block animate-float-slow" style={{ animationDelay: '2s' }}>
-       <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z"/><path d="M12 22c2.5-3 2.5-17 0-20"/><path d="M12 22c-2.5-3-2.5-17 0-20"/><path d="M2 12h20"/></svg>
+
+    {/* Olive / laurel sprig */}
+    <div className="absolute top-1/3 right-[5%] md:right-[10%] opacity-25 md:opacity-35 scale-75 md:scale-100 animate-float-reverse">
+       <svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+         <path d="M4 20 C 9 18, 14 14, 20 4" />
+         <path d="M8 16 C 8 14, 9.5 12.5, 11.5 12.5 C 11.5 14.5, 10 16, 8 16 Z" />
+         <path d="M12 12 C 12 10, 13.5 8.5, 15.5 8.5 C 15.5 10.5, 14 12, 12 12 Z" />
+         <path d="M15.5 8 C 15.5 6, 17 4.5, 19 4.5 C 19 6.5, 17.5 8, 15.5 8 Z" />
+       </svg>
+    </div>
+
+    {/* Thin geometric ring */}
+    <div className="absolute top-[20%] lg:bottom-1/3 right-[15%] md:right-[20%] opacity-25 md:opacity-35 scale-75 md:scale-100 z-0 hidden sm:block animate-float-slow" style={{ animationDelay: '2s' }}>
+       <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="0.8" strokeLinecap="round">
+         <circle cx="12" cy="12" r="10" />
+         <circle cx="12" cy="12" r="6" strokeDasharray="2 3" />
+       </svg>
+    </div>
+
+    {/* Small twinkle */}
+    <div className="absolute top-[15%] left-[35%] opacity-30 md:opacity-40 hidden md:block animate-pulse-soft" style={{ animationDelay: '3s' }}>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="white" stroke="none">
+        <path d="M12 2 L13.2 10.8 L22 12 L13.2 13.2 L12 22 L10.8 13.2 L2 12 L10.8 10.8 Z" />
+      </svg>
     </div>
 
     {/* Decorative wheat stalks */}
@@ -786,10 +829,42 @@ const OrderForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
            Object.values(cookieQuantities).some(v => v !== 0);
   };
 
+  const buildOrderSummary = () => {
+    const lines: string[] = [];
+    lines.push(`New order from ${name} (${phone})`);
+    lines.push(delivery === 'delivery' ? `Delivery to: ${address}` : 'Pick-up');
+    const breadLines = breads
+      .map(b => {
+        const qty = breadQuantities[b.key];
+        if (qty === 0 || qty === undefined) return null;
+        if (qty === 'other') return `${b.name}: other (${otherNotes[`bread-${b.key}`] || 'TBD'})`;
+        return `${b.name} x${qty}`;
+      })
+      .filter(Boolean);
+    const cookieLines = cookies
+      .map(c => {
+        const qty = cookieQuantities[c.key];
+        if (qty === 0 || qty === undefined) return null;
+        if (qty === 'other') return `${c.name}: other (${otherNotes[`cookie-${c.key}`] || 'TBD'})`;
+        return `${c.name} x${qty}`;
+      })
+      .filter(Boolean);
+    if (breadLines.length) lines.push('Breads: ' + breadLines.join(', '));
+    if (cookieLines.length) lines.push('Cookies: ' + cookieLines.join(', '));
+    lines.push(`Estimated total: $${calculateTotal()}`);
+    return lines.join('\n');
+  };
+
+  const notifyOwner = () => {
+    const body = encodeURIComponent(buildOrderSummary());
+    window.location.href = `sms:+17864139347?&body=${body}`;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !phone || !delivery || !hasItems()) return;
     if (delivery === 'delivery' && !address) return;
+    notifyOwner();
     setSubmitted(true);
   };
 
@@ -805,16 +880,13 @@ const OrderForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
           <button onClick={onClose} className="absolute top-5 right-5 text-ink/30 hover:text-ink transition-colors">
             <X className="w-6 h-6" />
           </button>
-          <CheckCircle2 className="w-20 h-20 text-teal mx-auto mb-6" />
-          <h2 className="text-3xl md:text-4xl font-extrabold text-ink mb-4">Order Received!</h2>
-          <p className="text-ink/70 font-medium text-lg mb-2">
-            Thank you, <span className="font-bold text-ink">{name}</span>!
+          <CheckCircle2 className="w-16 h-16 text-teal mx-auto mb-4" />
+          <h2 className="text-3xl md:text-4xl font-extrabold text-ink mb-2">Order Received!</h2>
+          <p className="text-ink/70 font-medium leading-relaxed mb-6">
+            Thank you, <span className="font-bold text-ink">{name}</span>! We've notified Melina at <span className="font-bold text-ink">(786) 413-9347</span>.
           </p>
-          <p className="text-ink/70 font-medium leading-relaxed">
-            I'll reach out to you shortly at <span className="font-bold text-ink">{phone}</span> to confirm timing and send payment details.
-          </p>
-          <div className="mt-8 bg-[#f0ece4] rounded-2xl p-6 text-left">
-            <div className="flex justify-between items-center mb-2">
+          <div className="bg-[#f0ece4] rounded-2xl p-5 text-left mb-6">
+            <div className="flex justify-between items-center">
               <span className="font-bold text-ink">Estimated Total</span>
               <span className="text-2xl font-extrabold text-teal">${calculateTotal()}</span>
             </div>
@@ -822,21 +894,61 @@ const OrderForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
               {delivery === 'delivery' ? 'Includes $5 delivery fee' : 'Pick-up, no delivery fee'}
             </span>
           </div>
-          <button
-            onClick={() => {
-              setSubmitted(false);
-              setName('');
-              setPhone('');
-              setDelivery('');
-              setAddress('');
-              setBreadQuantities({ sourdough: 0, semolina: 0, banana: 0, glutenFree: 0 });
-              setCookieQuantities({ chocolateChip: 0, chocolateChipDuo: 0, whiteChocolateChip: 0, whiteMacadamia: 0 });
-              setOtherNotes({});
-            }}
-            className="mt-8 bg-teal hover:bg-teal/90 text-white px-8 py-3 rounded-full font-bold transition-colors"
-          >
-            Place Another Order
-          </button>
+          <div className="border-2 border-teal/20 rounded-2xl p-6 bg-white">
+            <h3 className="text-lg font-extrabold text-ink mb-1">Pay with Zelle to confirm</h3>
+            <p className="text-ink/60 text-sm font-medium mb-4">Scan the QR code or send to the phone number below.</p>
+            <div className="flex flex-col sm:flex-row items-center gap-5">
+              <img
+                src="/zelle-qr.png"
+                alt="Zelle QR code for Your Neighborly Loaf"
+                className="w-40 h-40 object-contain rounded-xl border border-ink/10 bg-white p-1"
+              />
+              <div className="text-left flex-1">
+                <p className="text-xs font-bold uppercase tracking-wide text-ink/40 mb-1">Zelle Phone</p>
+                <a
+                  href="tel:+17864139347"
+                  className="block text-2xl font-extrabold text-teal hover:text-teal/80 transition-colors"
+                >
+                  (786) 413-9347
+                </a>
+                <p className="text-xs text-ink/50 font-medium mt-2 leading-relaxed">
+                  Recipient: <strong className="text-ink/70">Your Neighborly Loaf</strong>
+                </p>
+                <button
+                  onClick={() => navigator.clipboard?.writeText('7864139347')}
+                  className="mt-3 text-xs font-bold text-teal hover:text-teal/80 underline underline-offset-2"
+                >
+                  Copy number
+                </button>
+              </div>
+            </div>
+          </div>
+          <p className="text-ink/50 text-xs font-medium mt-4 leading-relaxed">
+            Melina will follow up at <strong className="text-ink/70">{phone}</strong> to confirm pick-up/delivery timing.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 mt-6">
+            <button
+              onClick={notifyOwner}
+              className="flex-1 bg-white border-2 border-teal text-teal hover:bg-teal hover:text-white px-6 py-3 rounded-full font-bold transition-colors"
+            >
+              Resend Order to Bakery
+            </button>
+            <button
+              onClick={() => {
+                setSubmitted(false);
+                setName('');
+                setPhone('');
+                setDelivery('');
+                setAddress('');
+                setBreadQuantities({ sourdough: 0, semolina: 0, banana: 0, glutenFree: 0 });
+                setCookieQuantities({ chocolateChip: 0, chocolateChipDuo: 0, whiteChocolateChip: 0, whiteMacadamia: 0 });
+                setOtherNotes({});
+              }}
+              className="flex-1 bg-teal hover:bg-teal/90 text-white px-6 py-3 rounded-full font-bold transition-colors"
+            >
+              Place Another Order
+            </button>
+          </div>
         </motion.div>
       </div>
     );
@@ -881,7 +993,7 @@ const OrderForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
               </div>
             </div>
             <p className="text-ink/60 text-xs font-medium pt-1">
-              Payment is required to confirm your order. I will send you a message for payment once your order is received.
+              Payment via Zelle to <strong className="text-ink">(786) 413-9347</strong> confirms your order. You'll see the QR code after submitting.
             </p>
           </div>
         </div>
@@ -1098,7 +1210,7 @@ const OrderForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
               Submit Order
             </button>
             <p className="text-center text-ink/40 text-xs font-medium mt-4">
-              Thank you for your support! I'll confirm timing and send payment details shortly.
+              On submit, your order goes straight to Melina and you'll get a Zelle QR code to pay.
             </p>
           </div>
         </form>
