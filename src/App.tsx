@@ -770,12 +770,50 @@ const ReferralForm = () => {
 type BreadKey = 'sourdough' | 'semolina' | 'banana' | 'glutenFree';
 type CookieKey = 'chocolateChip' | 'chocolateChipDuo' | 'whiteChocolateChip' | 'whiteMacadamia';
 
+const BREAD_SKU: Record<BreadKey, string> = {
+  sourdough: 'LOAF-SOURDOUGH',
+  semolina: 'LOAF-SEMOLINA',
+  banana: 'LOAF-BANANA',
+  glutenFree: 'LOAF-GF',
+};
+
+const COOKIE_SKU_PREFIX: Record<CookieKey, string> = {
+  chocolateChip: 'CKY-CHOC',
+  chocolateChipDuo: 'CKY-DUO',
+  whiteChocolateChip: 'CKY-WHITE',
+  whiteMacadamia: 'CKY-MAC',
+};
+
+// Generate the next ~5 weeks of Tuesdays and Thursdays for the date picker.
+function upcomingFulfillmentDates(weeks = 5): { value: string; label: string }[] {
+  const out: { value: string; label: string }[] = [];
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  for (let i = 1; i <= weeks * 7; i++) {
+    const d = new Date(now);
+    d.setDate(now.getDate() + i);
+    const dow = d.getDay();
+    if (dow !== 2 && dow !== 4) continue;
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const label = d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+    out.push({ value: `${yyyy}-${mm}-${dd}`, label });
+  }
+  return out;
+}
+
 const OrderForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [delivery, setDelivery] = useState<'pickup' | 'delivery' | ''>('');
   const [address, setAddress] = useState('');
+  const [fulfillmentDate, setFulfillmentDate] = useState('');
+  const [orderNotes, setOrderNotes] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [otherNotes, setOtherNotes] = useState<Record<string, string>>({});
   const [breadQuantities, setBreadQuantities] = useState<Record<BreadKey, number | 'other'>>({
     sourdough: 0, semolina: 0, banana: 0, glutenFree: 0,
@@ -785,6 +823,8 @@ const OrderForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
   });
 
   if (!isOpen) return null;
+
+  const fulfillmentDateOptions = upcomingFulfillmentDates();
 
   const breads: { key: BreadKey; name: string; price: number }[] = [
     { key: 'sourdough', name: 'Sourdough', price: 12 },
@@ -833,6 +873,7 @@ const OrderForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
     const lines: string[] = [];
     lines.push(`New order from ${name} (${phone})`);
     lines.push(delivery === 'delivery' ? `Delivery to: ${address}` : 'Pick-up');
+    if (fulfillmentDate) lines.push(`For: ${fulfillmentDate}`);
     const breadLines = breads
       .map(b => {
         const qty = breadQuantities[b.key];
@@ -851,6 +892,7 @@ const OrderForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
       .filter(Boolean);
     if (breadLines.length) lines.push('Breads: ' + breadLines.join(', '));
     if (cookieLines.length) lines.push('Cookies: ' + cookieLines.join(', '));
+    if (orderNotes.trim()) lines.push(`Notes: ${orderNotes.trim()}`);
     lines.push(`Estimated total: $${calculateTotal()}`);
     return lines.join('\n');
   };
@@ -860,11 +902,104 @@ const OrderForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
     window.location.href = `sms:+17864139347?&body=${body}`;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const buildWebhookPayload = () => {
+    const websiteOrderId = `ord_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const items: { sku: string; name: string; qty: number; unit_price: number }[] = [];
+    const otherLines: string[] = [];
+
+    breads.forEach(b => {
+      const qty = breadQuantities[b.key];
+      if (qty === 'other') {
+        otherLines.push(`${b.name} (custom): ${otherNotes[`bread-${b.key}`] || 'TBD'}`);
+      } else if (typeof qty === 'number' && qty > 0) {
+        items.push({ sku: BREAD_SKU[b.key], name: b.name, qty, unit_price: b.price });
+      }
+    });
+
+    cookies.forEach(c => {
+      const qty = cookieQuantities[c.key];
+      if (qty === 'other') {
+        otherLines.push(`${c.name} (custom): ${otherNotes[`cookie-${c.key}`] || 'TBD'}`);
+      } else if (typeof qty === 'number' && qty > 0) {
+        const tier = cookiePricing.find(t => t.qty === qty);
+        if (tier) {
+          items.push({
+            sku: `${COOKIE_SKU_PREFIX[c.key]}-${qty}`,
+            name: `${c.name} (${qty}ct)`,
+            qty: 1,
+            unit_price: tier.price,
+          });
+        }
+      }
+    });
+
+    const subtotal = items.reduce((sum, it) => sum + it.qty * it.unit_price, 0);
+    const deliveryFee = delivery === 'delivery' ? 5 : 0;
+    const notesParts: string[] = [];
+    if (orderNotes.trim()) notesParts.push(orderNotes.trim());
+    if (otherLines.length) notesParts.push(otherLines.join(' | '));
+
+    return {
+      website_order_id: websiteOrderId,
+      placed_at: new Date().toISOString(),
+      customer: { name, email: email.trim(), phone },
+      fulfillment: {
+        type: delivery as 'pickup' | 'delivery',
+        date: fulfillmentDate,
+        address: delivery === 'delivery' ? address : null,
+      },
+      items,
+      subtotal: Number(subtotal.toFixed(2)),
+      delivery_fee: deliveryFee,
+      total: Number((subtotal + deliveryFee).toFixed(2)),
+      notes: notesParts.join(' — '),
+    };
+  };
+
+  const submitToDashboard = async (): Promise<{ ok: boolean; cutoffPassed: boolean }> => {
+    try {
+      const payload = buildWebhookPayload();
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) return { ok: true, cutoffPassed: false };
+      let bodyText = '';
+      try { bodyText = await res.text(); } catch { /* ignore */ }
+      // 409 with anything other than a duplicate marker = cut-off passed.
+      if (res.status === 409 && !/duplicate/i.test(bodyText)) {
+        return { ok: false, cutoffPassed: true };
+      }
+      if (res.status === 409) return { ok: true, cutoffPassed: false };
+      console.warn('[orders] dashboard webhook returned', res.status, bodyText);
+      return { ok: false, cutoffPassed: false };
+    } catch (err) {
+      console.warn('[orders] dashboard webhook unreachable', err);
+      return { ok: false, cutoffPassed: false };
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !phone || !delivery || !hasItems()) return;
+    if (submitting) return;
+    if (!name || !phone || !delivery || !fulfillmentDate || !hasItems()) return;
     if (delivery === 'delivery' && !address) return;
+
+    setSubmitting(true);
+    setSubmitError(null);
+
+    const result = await submitToDashboard();
+    if (result.cutoffPassed) {
+      setSubmitting(false);
+      setSubmitError("The cut-off for that date has passed. Please pick a later pick-up/delivery date.");
+      return;
+    }
+
+    // Whether the dashboard accepted or not, fall back to SMS so the order
+    // still reaches Melina while the webhook function is being rolled out.
     notifyOwner();
+    setSubmitting(false);
     setSubmitted(true);
   };
 
@@ -938,8 +1073,12 @@ const OrderForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
                 setSubmitted(false);
                 setName('');
                 setPhone('');
+                setEmail('');
                 setDelivery('');
                 setAddress('');
+                setFulfillmentDate('');
+                setOrderNotes('');
+                setSubmitError(null);
                 setBreadQuantities({ sourdough: 0, semolina: 0, banana: 0, glutenFree: 0 });
                 setCookieQuantities({ chocolateChip: 0, chocolateChipDuo: 0, whiteChocolateChip: 0, whiteMacadamia: 0 });
                 setOtherNotes({});
@@ -1023,6 +1162,18 @@ const OrderForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
                 value={phone}
                 onChange={e => setPhone(e.target.value)}
                 placeholder="(555) 123-4567"
+                className="w-full px-5 py-3.5 rounded-xl border-2 border-ink/10 focus:border-teal focus:ring-0 outline-none font-medium text-ink placeholder:text-ink/30 transition-colors bg-white"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-bold text-ink mb-2">
+                Email <span className="text-ink/40 font-medium">(optional)</span>
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="you@example.com"
                 className="w-full px-5 py-3.5 rounded-xl border-2 border-ink/10 focus:border-teal focus:ring-0 outline-none font-medium text-ink placeholder:text-ink/30 transition-colors bg-white"
               />
             </div>
@@ -1189,6 +1340,38 @@ const OrderForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
                 />
               </div>
             )}
+            <div className="mt-6">
+              <label className="block text-sm font-bold text-ink mb-2">
+                Pick-up / Delivery Date <span className="text-yellow">*</span>
+              </label>
+              <select
+                required
+                value={fulfillmentDate}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFulfillmentDate(e.target.value)}
+                className="w-full px-5 py-3.5 rounded-xl border-2 border-ink/10 focus:border-teal focus:ring-0 outline-none font-medium text-ink transition-colors bg-white"
+              >
+                <option value="">Choose a Tuesday or Thursday…</option>
+                {fulfillmentDateOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              <p className="text-xs text-ink/50 font-medium mt-2">
+                Tuesday orders are due by Saturday. Thursday orders are due by Monday.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-ink mb-2">
+              Notes <span className="text-ink/40 font-medium">(optional)</span>
+            </label>
+            <textarea
+              rows={3}
+              value={orderNotes}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setOrderNotes(e.target.value)}
+              placeholder="Allergies, preferences, gift instructions…"
+              className="w-full px-5 py-3.5 rounded-xl border-2 border-ink/10 focus:border-teal focus:ring-0 outline-none font-medium text-ink placeholder:text-ink/30 transition-colors bg-white resize-none"
+            />
           </div>
 
           <div className="bg-ink/[0.03] rounded-2xl p-6">
@@ -1204,11 +1387,14 @@ const OrderForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
             </p>
             <button
               type="submit"
-              disabled={!name || !phone || !delivery || !hasItems() || (delivery === 'delivery' && !address)}
+              disabled={submitting || !name || !phone || !delivery || !fulfillmentDate || !hasItems() || (delivery === 'delivery' && !address)}
               className="w-full bg-yellow hover:bg-yellow-hover disabled:opacity-40 disabled:cursor-not-allowed text-white py-4 rounded-full font-bold text-lg transition-colors shadow-md"
             >
-              Submit Order
+              {submitting ? 'Submitting…' : 'Submit Order'}
             </button>
+            {submitError && (
+              <p className="text-center text-red-600 text-sm font-bold mt-3">{submitError}</p>
+            )}
             <p className="text-center text-ink/40 text-xs font-medium mt-4">
               On submit, your order goes straight to Melina and you'll get a Zelle QR code to pay.
             </p>
