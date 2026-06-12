@@ -770,6 +770,11 @@ const ReferralForm = () => {
 type BreadKey = 'sourdough' | 'semolina' | 'banana' | 'glutenFree';
 type CookieKey = 'chocolateChip' | 'chocolateChipDuo' | 'whiteChocolateChip' | 'whiteMacadamia';
 
+// Web3Forms access key — public by design (safe to ship in the client bundle).
+// Orders submit directly from the browser to Web3Forms, which emails them to
+// the linked inbox (yourneighborlyloaf@gmail.com).
+const WEB3FORMS_ACCESS_KEY = '43a3ddc3-73d4-408e-8ac8-89215b31fbec';
+
 const BREAD_SKU: Record<BreadKey, string> = {
   sourdough: 'LOAF-SOURDOUGH',
   semolina: 'LOAF-SEMOLINA',
@@ -923,27 +928,43 @@ const OrderForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
     };
   };
 
-  const submitToDashboard = async (): Promise<{ ok: boolean; cutoffPassed: boolean }> => {
+  // Email the order to the bakery via Web3Forms, called directly from the
+  // browser. Web3Forms is built for client-side use and its access key is
+  // public/safe to expose; calling it server-side gets blocked by Cloudflare,
+  // so the submission must originate from the customer's browser.
+  const submitOrder = async (): Promise<boolean> => {
     try {
       const payload = buildWebhookPayload();
-      const res = await fetch('/api/orders', {
+      const itemLines = payload.items
+        .map(it => `${it.qty}x ${it.name} — $${(it.qty * it.unit_price).toFixed(2)}`)
+        .join('\n');
+      const res = await fetch('https://api.web3forms.com/submit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          access_key: WEB3FORMS_ACCESS_KEY,
+          subject: `New order — ${payload.customer.name} ($${payload.total.toFixed(2)})`,
+          from_name: 'Your Neighborly Loaf — Orders',
+          replyto: payload.customer.email || undefined,
+          Customer: payload.customer.name,
+          Phone: payload.customer.phone,
+          Email: payload.customer.email || '—',
+          Fulfillment: `${payload.fulfillment.type} on ${payload.fulfillment.date}`,
+          Address: payload.fulfillment.address || '—',
+          Items: itemLines,
+          Subtotal: `$${payload.subtotal.toFixed(2)}`,
+          'Delivery fee': `$${payload.delivery_fee.toFixed(2)}`,
+          Total: `$${payload.total.toFixed(2)}`,
+          Notes: payload.notes || '—',
+          'Order ID': payload.website_order_id,
+        }),
       });
-      if (res.ok) return { ok: true, cutoffPassed: false };
-      let bodyText = '';
-      try { bodyText = await res.text(); } catch { /* ignore */ }
-      // 409 with anything other than a duplicate marker = cut-off passed.
-      if (res.status === 409 && !/duplicate/i.test(bodyText)) {
-        return { ok: false, cutoffPassed: true };
-      }
-      if (res.status === 409) return { ok: true, cutoffPassed: false };
-      console.warn('[orders] dashboard webhook returned', res.status, bodyText);
-      return { ok: false, cutoffPassed: false };
+      const data = await res.json().catch(() => ({} as { success?: boolean }));
+      if (!data.success) console.warn('[orders] web3forms rejected', data);
+      return !!data.success;
     } catch (err) {
-      console.warn('[orders] dashboard webhook unreachable', err);
-      return { ok: false, cutoffPassed: false };
+      console.warn('[orders] web3forms submit failed', err);
+      return false;
     }
   };
 
@@ -956,15 +977,13 @@ const OrderForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
     setSubmitting(true);
     setSubmitError(null);
 
-    const result = await submitToDashboard();
-    if (result.cutoffPassed) {
+    const ok = await submitOrder();
+    if (!ok) {
       setSubmitting(false);
-      setSubmitError("The cut-off for that date has passed. Please pick a later pick-up/delivery date.");
+      setSubmitError("Something went wrong sending your order. Please try again, or text Melina at (786) 413-9347.");
       return;
     }
 
-    // The order is emailed to the bakery by /api/orders. Show the Zelle
-    // confirmation regardless so the customer can complete payment.
     setSubmitting(false);
     setSubmitted(true);
   };
