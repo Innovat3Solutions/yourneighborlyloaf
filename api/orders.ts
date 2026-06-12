@@ -2,11 +2,16 @@
 // the full order to the bakery owner. Kept fully self-contained (no local
 // imports) so the Vercel Node runtime never has a module to fail to resolve.
 //
+// Email delivery (first configured option wins):
+//   1. Resend       — set RESEND_API_KEY (+ OWNER_EMAIL). Branded, most robust.
+//   2. Web3Forms    — set WEB3FORMS_ACCESS_KEY. Keyless-account form-to-email;
+//                     the access key itself determines the destination inbox.
+//
 // Env vars:
-//   OWNER_EMAIL    — destination inbox (required)
-//   APP_URL        — site origin, used as the FormSubmit Referer (optional)
-//   RESEND_API_KEY — switches delivery to Resend when present (optional)
-//   RESEND_FROM    — Resend from-address (optional)
+//   WEB3FORMS_ACCESS_KEY — Web3Forms access key (default delivery path)
+//   OWNER_EMAIL          — destination inbox (required only for Resend)
+//   RESEND_API_KEY       — switches delivery to Resend when present (optional)
+//   RESEND_FROM          — Resend from-address (optional)
 
 type OrderItem = { sku: string; name: string; qty: number; unit_price: number };
 export type OrderPayload = {
@@ -85,53 +90,43 @@ async function sendViaResend(o: OrderPayload, to: string): Promise<ChannelResult
   }
 }
 
-async function sendViaFormSubmit(o: OrderPayload, to: string): Promise<ChannelResult> {
-  // FormSubmit rejects requests that lack a web-server Referer (anti-spam), so
-  // we present the site's origin. APP_URL is set in production; the default
-  // just needs to be a plausible https origin for FormSubmit's check.
-  const origin = process.env.APP_URL || 'https://yourneighborlyloaf.com';
+async function sendViaWeb3Forms(o: OrderPayload): Promise<ChannelResult> {
+  const accessKey = process.env.WEB3FORMS_ACCESS_KEY!;
   try {
-    const res = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(to)}`, {
+    const res = await fetch('https://api.web3forms.com/submit', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        Referer: origin,
-        Origin: origin,
-      },
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
-        _subject: `New order — ${o.customer.name} (${money(o.total)})`,
-        _replyto: o.customer.email || undefined,
-        _template: 'box',
-        name: o.customer.name,
-        order: orderSummary(o),
+        access_key: accessKey,
+        subject: `New order — ${o.customer.name} (${money(o.total)})`,
+        from_name: 'Your Neighborly Loaf — Orders',
+        replyto: o.customer.email || undefined,
+        // The order summary becomes the email body.
+        message: orderSummary(o),
       }),
     });
 
-    // FormSubmit always returns HTTP 200; the real outcome is in the JSON body.
-    //   success:"true"  -> delivered
-    //   success:"false" + "Activation" message -> queued, owner must click the
-    //     one-time activation link before delivery begins (not a failure)
-    //   success:"false" + anything else -> a real rejection
+    // Web3Forms returns JSON { success: boolean, message: string }.
     const text = await res.text();
-    let body: { success?: string; message?: string } = {};
-    try { body = JSON.parse(text); } catch { /* non-JSON => treat as failure below */ }
+    let body: { success?: boolean; message?: string } = {};
+    try { body = JSON.parse(text); } catch { /* non-JSON => failure below */ }
 
-    if (body.success === 'true') return { status: 'sent' };
-    if (/activat/i.test(body.message || '')) {
-      return { status: 'sent', detail: 'pending one-time owner activation (check inbox)' };
-    }
-    return { status: 'failed', detail: `FormSubmit: ${(body.message || text).slice(0, 300)}` };
+    if (body.success) return { status: 'sent' };
+    return { status: 'failed', detail: `Web3Forms ${res.status}: ${(body.message || text).slice(0, 300)}` };
   } catch (err) {
-    return { status: 'failed', detail: `FormSubmit fetch failed: ${(err as Error).message}` };
+    return { status: 'failed', detail: `Web3Forms fetch failed: ${(err as Error).message}` };
   }
 }
 
 export async function notifyOwner(o: OrderPayload): Promise<ChannelResult> {
-  const to = process.env.OWNER_EMAIL;
-  if (!to) return { status: 'skipped', detail: 'OWNER_EMAIL not set' };
-  // Prefer Resend when configured; otherwise use FormSubmit (no API key).
-  return process.env.RESEND_API_KEY ? sendViaResend(o, to) : sendViaFormSubmit(o, to);
+  // Prefer Resend when configured; otherwise use Web3Forms (keyless account).
+  if (process.env.RESEND_API_KEY && process.env.OWNER_EMAIL) {
+    return sendViaResend(o, process.env.OWNER_EMAIL);
+  }
+  if (process.env.WEB3FORMS_ACCESS_KEY) {
+    return sendViaWeb3Forms(o);
+  }
+  return { status: 'skipped', detail: 'no email delivery configured (set WEB3FORMS_ACCESS_KEY or RESEND_API_KEY)' };
 }
 
 export default async function handler(req: any, res: any) {
