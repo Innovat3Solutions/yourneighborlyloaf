@@ -1,20 +1,6 @@
-import crypto from 'node:crypto';
+import { notifyOwner, type OrderPayload } from './_notify.ts';
 
-const WEBHOOK_URL = 'https://xcbethsneocssvwbxyjb.supabase.co/functions/v1/webhooks-orders';
-
-type IncomingPayload = {
-  website_order_id: string;
-  placed_at: string;
-  customer: { name: string; email: string; phone: string };
-  fulfillment: { type: 'pickup' | 'delivery'; date: string; address: string | null };
-  items: { sku: string; name: string; qty: number; unit_price: number }[];
-  subtotal: number;
-  delivery_fee: number;
-  total: number;
-  notes: string;
-};
-
-function isValidPayload(p: unknown): p is IncomingPayload {
+function isValidPayload(p: unknown): p is OrderPayload {
   if (!p || typeof p !== 'object') return false;
   const o = p as Record<string, unknown>;
   const c = o.customer as Record<string, unknown> | undefined;
@@ -35,33 +21,15 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'method_not_allowed' });
   }
 
-  const secret = process.env.BAKERY_WEBHOOK_SECRET;
-  if (!secret) {
-    return res.status(503).json({ error: 'webhook_secret_missing' });
-  }
-
   if (!isValidPayload(req.body)) {
     return res.status(400).json({ error: 'invalid_payload' });
   }
 
-  const body = JSON.stringify(req.body);
-  const signature = crypto.createHmac('sha256', secret).update(body).digest('hex');
+  const result = await notifyOwner(req.body);
+  const sent = result.email.status === 'sent' || result.sms.status === 'sent';
+  const allFailed = result.email.status === 'failed' && result.sms.status === 'failed';
 
-  try {
-    const upstream = await fetch(WEBHOOK_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Bakery-Signature': signature,
-      },
-      body,
-    });
-    const text = await upstream.text();
-    res.status(upstream.status);
-    res.setHeader('content-type', upstream.headers.get('content-type') || 'application/json');
-    return res.send(text);
-  } catch (err) {
-    console.error('[orders] upstream fetch failed', err);
-    return res.status(502).json({ error: 'upstream_unreachable' });
-  }
+  // 200 if at least one channel delivered; 502 only when every configured
+  // channel actively failed (so the frontend can fall back to the SMS link).
+  return res.status(sent ? 200 : allFailed ? 502 : 503).json({ ok: sent, channels: result });
 }
