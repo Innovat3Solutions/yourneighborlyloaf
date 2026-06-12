@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
-import { notifyOwner, type OrderPayload } from '../api/_notify.ts';
+import { notifyOwner, type OrderPayload } from '../api/_notify';
 
 // Load .env.local first (developer secrets), then fall back to .env.
 // In production, hosting-provider env vars take precedence and these calls are no-ops.
@@ -34,12 +34,10 @@ app.post('/api/orders', async (req, res) => {
     return res.status(400).json({ error: 'invalid_payload' });
   }
 
-  const result = await notifyOwner(req.body);
-  const sent = result.email.status === 'sent' || result.sms.status === 'sent';
-  const allFailed = result.email.status === 'failed' && result.sms.status === 'failed';
-
-  console.log('[orders] notify', req.body.website_order_id, JSON.stringify(result));
-  return res.status(sent ? 200 : allFailed ? 502 : 503).json({ ok: sent, channels: result });
+  const email = await notifyOwner(req.body);
+  const status = email.status === 'sent' ? 200 : email.status === 'failed' ? 502 : 503;
+  console.log('[orders] notify', req.body.website_order_id, JSON.stringify(email));
+  return res.status(status).json({ ok: email.status === 'sent', email });
 });
 
 const distDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');

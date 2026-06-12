@@ -869,39 +869,6 @@ const OrderForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
            Object.values(cookieQuantities).some(v => v !== 0);
   };
 
-  const buildOrderSummary = () => {
-    const lines: string[] = [];
-    lines.push(`New order from ${name} (${phone})`);
-    lines.push(delivery === 'delivery' ? `Delivery to: ${address}` : 'Pick-up');
-    if (fulfillmentDate) lines.push(`For: ${fulfillmentDate}`);
-    const breadLines = breads
-      .map(b => {
-        const qty = breadQuantities[b.key];
-        if (qty === 0 || qty === undefined) return null;
-        if (qty === 'other') return `${b.name}: other (${otherNotes[`bread-${b.key}`] || 'TBD'})`;
-        return `${b.name} x${qty}`;
-      })
-      .filter(Boolean);
-    const cookieLines = cookies
-      .map(c => {
-        const qty = cookieQuantities[c.key];
-        if (qty === 0 || qty === undefined) return null;
-        if (qty === 'other') return `${c.name}: other (${otherNotes[`cookie-${c.key}`] || 'TBD'})`;
-        return `${c.name} x${qty}`;
-      })
-      .filter(Boolean);
-    if (breadLines.length) lines.push('Breads: ' + breadLines.join(', '));
-    if (cookieLines.length) lines.push('Cookies: ' + cookieLines.join(', '));
-    if (orderNotes.trim()) lines.push(`Notes: ${orderNotes.trim()}`);
-    lines.push(`Estimated total: $${calculateTotal()}`);
-    return lines.join('\n');
-  };
-
-  const notifyOwner = () => {
-    const body = encodeURIComponent(buildOrderSummary());
-    window.location.href = `sms:+17864139347?&body=${body}`;
-  };
-
   const buildWebhookPayload = () => {
     const websiteOrderId = `ord_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const items: { sku: string; name: string; qty: number; unit_price: number }[] = [];
@@ -996,9 +963,8 @@ const OrderForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
       return;
     }
 
-    // Whether the dashboard accepted or not, fall back to SMS so the order
-    // still reaches Melina while the webhook function is being rolled out.
-    notifyOwner();
+    // The order is emailed to the bakery by /api/orders. Show the Zelle
+    // confirmation regardless so the customer can complete payment.
     setSubmitting(false);
     setSubmitted(true);
   };
@@ -1018,7 +984,7 @@ const OrderForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
           <CheckCircle2 className="w-16 h-16 text-teal mx-auto mb-4" />
           <h2 className="text-3xl md:text-4xl font-extrabold text-ink mb-2">Order Received!</h2>
           <p className="text-ink/70 font-medium leading-relaxed mb-6">
-            Thank you, <span className="font-bold text-ink">{name}</span>! We've notified Melina at <span className="font-bold text-ink">(786) 413-9347</span>.
+            Thank you, <span className="font-bold text-ink">{name}</span>! Your order has been sent to the bakery. Please complete payment with Zelle below to confirm.
           </p>
           <div className="bg-[#f0ece4] rounded-2xl p-5 text-left mb-6">
             <div className="flex justify-between items-center">
@@ -1062,12 +1028,6 @@ const OrderForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
             Melina will follow up at <strong className="text-ink/70">{phone}</strong> to confirm pick-up/delivery timing.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 mt-6">
-            <button
-              onClick={notifyOwner}
-              className="flex-1 bg-white border-2 border-teal text-teal hover:bg-teal hover:text-white px-6 py-3 rounded-full font-bold transition-colors"
-            >
-              Resend Order to Bakery
-            </button>
             <button
               onClick={() => {
                 setSubmitted(false);

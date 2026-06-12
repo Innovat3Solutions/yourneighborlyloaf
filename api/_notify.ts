@@ -1,15 +1,15 @@
 // Shared owner-notification logic used by both the Vercel function (api/orders.ts)
 // and the local Express dev server (server/index.ts).
 //
-// When an order is placed we notify the bakery owner over two independent
-// channels — email (Resend) and SMS (Twilio) — so a single misconfigured or
-// down provider never silently swallows an order. Each channel is optional:
-// if its env vars are absent the channel is reported as "skipped" rather than
-// failing the request.
+// When an order is placed we email the full order to the bakery owner.
+// Delivery uses FormSubmit (zero-config, no API key) by default, and upgrades
+// automatically to Resend when RESEND_API_KEY is set.
 //
-// Required env vars:
-//   Email (Resend):  RESEND_API_KEY, OWNER_EMAIL   (RESEND_FROM optional)
-//   SMS   (Twilio):  TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM, OWNER_PHONE
+// Env vars:
+//   OWNER_EMAIL    — destination inbox (required)
+//   APP_URL        — site origin, used as the FormSubmit Referer (optional)
+//   RESEND_API_KEY — switches delivery to Resend when present (optional)
+//   RESEND_FROM    — Resend from-address (optional)
 
 export type OrderItem = { sku: string; name: string; qty: number; unit_price: number };
 export type OrderPayload = {
@@ -25,7 +25,6 @@ export type OrderPayload = {
 };
 
 export type ChannelResult = { status: 'sent' | 'skipped' | 'failed'; detail?: string };
-export type NotifyResult = { email: ChannelResult; sms: ChannelResult };
 
 const money = (n: number) => `$${n.toFixed(2)}`;
 
@@ -127,43 +126,6 @@ async function sendViaFormSubmit(o: OrderPayload, to: string): Promise<ChannelRe
   }
 }
 
-async function sendSms(o: OrderPayload): Promise<ChannelResult> {
-  const sid = process.env.TWILIO_ACCOUNT_SID;
-  const token = process.env.TWILIO_AUTH_TOKEN;
-  const from = process.env.TWILIO_FROM;
-  const to = process.env.OWNER_PHONE;
-  if (!sid || !token || !from || !to) {
-    return { status: 'skipped', detail: 'TWILIO_* or OWNER_PHONE not set' };
-  }
-
-  // SMS gets a compact version to stay within a sensible segment count.
-  const items = o.items.map((it) => `${it.qty}x ${it.name}`).join(', ');
-  const body =
-    `New order — ${o.customer.name}\n` +
-    `${items}\n` +
-    `Total ${money(o.total)} · ${o.fulfillment.type} ${o.fulfillment.date}\n` +
-    `${o.customer.phone}` +
-    (o.fulfillment.address ? `\n${o.fulfillment.address}` : '');
-
-  try {
-    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${sid}:${token}`).toString('base64')}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({ To: to, From: from, Body: body }).toString(),
-    });
-    if (!res.ok) {
-      return { status: 'failed', detail: `Twilio ${res.status}: ${(await res.text()).slice(0, 300)}` };
-    }
-    return { status: 'sent' };
-  } catch (err) {
-    return { status: 'failed', detail: `Twilio fetch failed: ${(err as Error).message}` };
-  }
-}
-
-export async function notifyOwner(o: OrderPayload): Promise<NotifyResult> {
-  const [email, sms] = await Promise.all([sendEmail(o), sendSms(o)]);
-  return { email, sms };
+export async function notifyOwner(o: OrderPayload): Promise<ChannelResult> {
+  return sendEmail(o);
 }

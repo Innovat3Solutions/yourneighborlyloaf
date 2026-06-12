@@ -1,4 +1,4 @@
-import { notifyOwner, type OrderPayload } from './_notify.ts';
+import { notifyOwner, type OrderPayload } from './_notify';
 
 function isValidPayload(p: unknown): p is OrderPayload {
   if (!p || typeof p !== 'object') return false;
@@ -25,11 +25,7 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ error: 'invalid_payload' });
   }
 
-  const result = await notifyOwner(req.body);
-  const sent = result.email.status === 'sent' || result.sms.status === 'sent';
-  const allFailed = result.email.status === 'failed' && result.sms.status === 'failed';
-
-  // 200 if at least one channel delivered; 502 only when every configured
-  // channel actively failed (so the frontend can fall back to the SMS link).
-  return res.status(sent ? 200 : allFailed ? 502 : 503).json({ ok: sent, channels: result });
+  const email = await notifyOwner(req.body);
+  const status = email.status === 'sent' ? 200 : email.status === 'failed' ? 502 : 503;
+  return res.status(status).json({ ok: email.status === 'sent', email });
 }
