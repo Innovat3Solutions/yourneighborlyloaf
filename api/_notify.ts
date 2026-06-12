@@ -86,10 +86,19 @@ async function sendViaResend(o: OrderPayload, to: string): Promise<ChannelResult
 }
 
 async function sendViaFormSubmit(o: OrderPayload, to: string): Promise<ChannelResult> {
+  // FormSubmit rejects requests that lack a web-server Referer (anti-spam),
+  // so we present the site's origin. APP_URL is set in production; the default
+  // just needs to be a plausible https origin for FormSubmit's check.
+  const origin = process.env.APP_URL || 'https://yourneighborlyloaf.com';
   try {
     const res = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(to)}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        Referer: origin,
+        Origin: origin,
+      },
       body: JSON.stringify({
         _subject: `New order — ${o.customer.name} (${money(o.total)})`,
         _replyto: o.customer.email || undefined,
@@ -98,15 +107,21 @@ async function sendViaFormSubmit(o: OrderPayload, to: string): Promise<ChannelRe
         order: orderSummary(o),
       }),
     });
+
+    // FormSubmit always returns HTTP 200; the real outcome is in the JSON body.
+    //   success:"true"  -> delivered
+    //   success:"false" + "Activation" message -> queued, owner must click the
+    //     one-time activation link before delivery begins (not a failure)
+    //   success:"false" + anything else -> a real rejection
     const text = await res.text();
-    if (!res.ok) {
-      return { status: 'failed', detail: `FormSubmit ${res.status}: ${text.slice(0, 300)}` };
+    let body: { success?: string; message?: string } = {};
+    try { body = JSON.parse(text); } catch { /* non-JSON => treat as failure below */ }
+
+    if (body.success === 'true') return { status: 'sent' };
+    if (/activat/i.test(body.message || '')) {
+      return { status: 'sent', detail: 'pending one-time owner activation (check inbox)' };
     }
-    // FormSubmit returns 200 with {"success":"true"} once the address is
-    // activated. Before activation it returns a success body asking the owner
-    // to confirm — surface that so we know to check the inbox.
-    const needsConfirm = /confirm|activat/i.test(text);
-    return { status: 'sent', detail: needsConfirm ? 'pending owner confirmation (check inbox)' : undefined };
+    return { status: 'failed', detail: `FormSubmit: ${(body.message || text).slice(0, 300)}` };
   } catch (err) {
     return { status: 'failed', detail: `FormSubmit fetch failed: ${(err as Error).message}` };
   }
