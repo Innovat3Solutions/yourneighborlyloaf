@@ -1,17 +1,26 @@
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
+import handler from '../api/orders';
 
-// Local preview server: serves the built site from dist/. Order emails are
-// sent directly from the browser to Web3Forms, so no API route is needed here.
+// Load .env.local first (developer secrets), then fall back to .env.
+// In production, hosting-provider env vars take precedence and these calls are no-ops.
+dotenv.config({ path: '.env.local' });
+dotenv.config();
+
 const PORT = Number(process.env.PORT) || 8787;
 
 const app = express();
+app.use(express.json({ limit: '64kb' }));
+
+// Reuse the exact Vercel handler so dev and prod share one implementation.
+app.post('/api/orders', (req, res) => handler(req, res));
 
 const distDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
 app.use(express.static(distDir));
 app.get('*', (_req, res) => res.sendFile(path.join(distDir, 'index.html')));
 
 app.listen(PORT, () => {
-  console.log(`[preview] listening on :${PORT}`);
+  console.log(`[orders] listening on :${PORT}`);
 });

@@ -770,11 +770,6 @@ const ReferralForm = () => {
 type BreadKey = 'sourdough' | 'semolina' | 'banana' | 'glutenFree';
 type CookieKey = 'chocolateChip' | 'chocolateChipDuo' | 'whiteChocolateChip' | 'whiteMacadamia';
 
-// Web3Forms access key — public by design (safe to ship in the client bundle).
-// Orders submit directly from the browser to Web3Forms, which emails them to
-// the linked inbox (yourneighborlyloaf@gmail.com).
-const WEB3FORMS_ACCESS_KEY = '43a3ddc3-73d4-408e-8ac8-89215b31fbec';
-
 const BREAD_SKU: Record<BreadKey, string> = {
   sourdough: 'LOAF-SOURDOUGH',
   semolina: 'LOAF-SEMOLINA',
@@ -928,42 +923,24 @@ const OrderForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
     };
   };
 
-  // Email the order to the bakery via Web3Forms, called directly from the
-  // browser. Web3Forms is built for client-side use and its access key is
-  // public/safe to expose; calling it server-side gets blocked by Cloudflare,
-  // so the submission must originate from the customer's browser.
+  // Email the order to the bakery via our /api/orders serverless function,
+  // which sends it through Resend. Returns true only when the email was sent.
   const submitOrder = async (): Promise<boolean> => {
     try {
       const payload = buildWebhookPayload();
-      const itemLines = payload.items
-        .map(it => `${it.qty}x ${it.name} — $${(it.qty * it.unit_price).toFixed(2)}`)
-        .join('\n');
-      const res = await fetch('https://api.web3forms.com/submit', {
+      const res = await fetch('/api/orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({
-          access_key: WEB3FORMS_ACCESS_KEY,
-          subject: `New order — ${payload.customer.name} ($${payload.total.toFixed(2)})`,
-          from_name: 'Your Neighborly Loaf — Orders',
-          replyto: payload.customer.email || undefined,
-          Customer: payload.customer.name,
-          Phone: payload.customer.phone,
-          Email: payload.customer.email || '—',
-          Fulfillment: `${payload.fulfillment.type} on ${payload.fulfillment.date}`,
-          Address: payload.fulfillment.address || '—',
-          Items: itemLines,
-          Subtotal: `$${payload.subtotal.toFixed(2)}`,
-          'Delivery fee': `$${payload.delivery_fee.toFixed(2)}`,
-          Total: `$${payload.total.toFixed(2)}`,
-          Notes: payload.notes || '—',
-          'Order ID': payload.website_order_id,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
-      const data = await res.json().catch(() => ({} as { success?: boolean }));
-      if (!data.success) console.warn('[orders] web3forms rejected', data);
-      return !!data.success;
+      if (!res.ok) {
+        console.warn('[orders] /api/orders returned', res.status, await res.text().catch(() => ''));
+        return false;
+      }
+      const data = await res.json().catch(() => ({} as { ok?: boolean }));
+      return !!data.ok;
     } catch (err) {
-      console.warn('[orders] web3forms submit failed', err);
+      console.warn('[orders] /api/orders unreachable', err);
       return false;
     }
   };
